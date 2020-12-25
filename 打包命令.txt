@@ -1,0 +1,19 @@
+ pyinstaller.exe -D -w -i .\icon.ico .\main.py --additional-hooks-dir=.
+ 
+ 
+ 
+ 修改默认的递归深度
+
+import sys  # 导入sys模块
+sys.setrecursionlimit(3000)  # 将默认的递归深度修改为3000
+
+
+创建一个hook-ctypes.macholib.py文件：
+里面的内容如下：
+
+from PyInstaller.utils.hooks import copy_metadata
+datas = copy_metadata('cffi') + copy_metadata('greenlet')
+
+
+ pyinstaller.exe -D -w -i .\icon.ico .\main.spec --additional-hooks-dir=.
+ 
