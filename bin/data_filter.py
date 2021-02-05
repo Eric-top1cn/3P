@@ -13,12 +13,6 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class DataFilter:
-    # def __init__(self):
-    #     self.iter_result_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data',
-    #                                          'results')
-    #     self.sum_result_frame = pd.DataFrame()
-    #     self.filter_data_frame = pd.DataFrame()
-
 
     def data_filter(self,file_path):
         '''main 函数'''
@@ -36,14 +30,13 @@ class DataFilter:
         self.filter_data_frame = origin_data_frame.drop('condition', axis=1) # 记录筛选完成后的原始数据
         self.sum_result_frame = self.data_aggr(origin_data_frame) # 按Model Num与Vendor Code汇总后的结果表
 
-
-
     def read_origin_data(self,basic_file):
         '''
         读给出的原始文件中数据，并进行简单处理
         basic_file 为记录原始数据的excel表格
         '''
         result = pd.DataFrame(pd.read_excel(basic_file))  # 源数据
+        if result.empty: return result
         result.drop([0, 1], inplace=True)
         result.columns = result.iloc[0]
         result.reset_index(inplace=True, drop=True)
@@ -83,7 +76,6 @@ class DataFilter:
         data_frame 待处理的数组
         '''
         cancel_sheets = settings.dependant_sku_sheets
-
         # 将指定的sheet中要取消的ASIN合并，并将Combo asin添加到每个code中
         # cancel asin
         asin_frame = pd.DataFrame()
@@ -99,7 +91,6 @@ class DataFilter:
             item['Vendor Code'] = sheet
             item.dropna(subset=['ASIN'], inplace=True)
             asin_frame = pd.concat([asin_frame, item], ignore_index=True)
-
         item = pd.DataFrame()
         for sheet in settings.sku_cancel_sheets:
             item = pd.concat([item, pd.DataFrame(pd.read_excel(
@@ -109,7 +100,6 @@ class DataFilter:
             item['Vendor Code'] = sheet
             item.dropna(subset=['ASIN'], inplace=True)
             asin_frame = pd.concat([asin_frame, item], ignore_index=True)
-
             # 判断asin是否可接单
             data_frame['condition'].fillna(0, inplace=True)
             for i in range(len(data_frame['Vendor Code'])):
@@ -119,7 +109,6 @@ class DataFilter:
                 asin = data_frame['ASIN'].iloc[i]
                 if asin in asin_frame[asin_frame['Vendor Code'] == code]['ASIN'].to_list():
                     data_frame['condition'].iloc[i] = 0
-
         # 修改Availability Status
         data_frame.loc[~ (data_frame['condition'] == 1.0),
                        'Availability Status'] = 'CB - Cancelled: Not our publication'
@@ -129,18 +118,14 @@ class DataFilter:
         '''
         将选出的可接单的产品按Model Num分组求和
         '''
-
         sum_frame = data_frame[data_frame['condition'] == 1][['Model Number', 'ASIN',
-                                                      'Title', 'Vendor Code']].drop_duplicates(
-            ['Model Number', 'Vendor Code'])
+                                    'Title', 'Vendor Code']].drop_duplicates(['Model Number', 'Vendor Code'])
         sum_frame['total'] = 0
         for i in range(len(sum_frame['total'])):
             model_num = sum_frame['Model Number'].iloc[i]
             vendor_code = sum_frame['Vendor Code'].iloc[i]
             sum_frame['total'].iloc[i] = data_frame[data_frame['Model Number'] ==
-                                                model_num][data_frame['Vendor Code'] == vendor_code][
-                'Quantity Ordered'].sum()
-
+                                        model_num][data_frame['Vendor Code'] == vendor_code]['Quantity Ordered'].sum()
         return sum_frame
 
 if __name__ == '__main__':

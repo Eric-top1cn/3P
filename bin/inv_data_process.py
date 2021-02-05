@@ -26,7 +26,7 @@ class InvDataProcess(GetApiInvData,DataFilter):
         self.inv_result_file = os.path.join(self.result_path,'inventory.xlsx')
         sku_list = self.sum_result_frame['Model Number'].tolist()
         self.start_spider(sku_list)
-        self.data_merge()
+        self.data_merge(os.path.join(settings.out_put_file_path,settings.out_put_file['SumResult']))
         self.vendor_sheet_data_process(self.inv_result_file)
         self.status_modify(self.inv_result_file)
 
@@ -42,7 +42,7 @@ class InvDataProcess(GetApiInvData,DataFilter):
             sheet_frame = sum_frame[sum_frame['Vendor Code'] == sheet]
             sheet_frame = sheet_frame.sort_values('Model Number', ascending=False)
 
-            sheet_frame.loc[sheet_frame['ActualAvailableQty'] <= 0, 'Warehouse'] = np.nan
+            sheet_frame.loc[sheet_frame['ActualAvailableQty'] <= 0, 'Location'] = np.nan
             sheet_frame.loc[sheet_frame['ActualAvailableQty'] <= 0, 'ActualAvailableQty'] = np.nan
             sheet_frame.to_excel(excel_writer,sheet_name=sheet, index=False)
         excel_writer.save()
@@ -86,25 +86,25 @@ class InvDataProcess(GetApiInvData,DataFilter):
         '''
 
         sum_frame = pd.read_excel(sum_agg_file)
-        inv_mongo = self.hs_mongo_config('inv_data_' + self.get_current_date())
-        inv_frame = pd.DataFrame(inv_mongo.find())
-        # inv_frame = pd.read_csv(self.inv_save_file,sep='\t')
+        inv_frame = pd.read_json(self.inv_save_file)
+        location_frame = pd.read_json(settings.location_data_file)
+        if 'Location' in inv_frame.columns: inv_frame.drop('Location',inplace=True,axis=1)
+        inv_frame = inv_frame.merge(location_frame[['ItemNum','Location']])
         inv_frame.drop_duplicates(['ItemNum'],inplace=True)
-        inv_frame = inv_frame[['ItemNum', 'ActualAvailableQty', 'Warehouse']]
-        for column in ['ActualAvailableQty', 'Warehouse', 'filter']: sum_frame[column] = np.nan
-
+        inv_frame = inv_frame[['ItemNum', 'ActualAvailableQty', 'Location']]
+        for column in ['ActualAvailableQty', 'Location', 'filter']: sum_frame[column] = np.nan
 
         for i,sku in enumerate(sum_frame['Model Number']):
             sku = str(sum_frame['Model Number'].iloc[i])
             vendor_code = str(sum_frame['Vendor Code'].iloc[i])
             try:
                 qty = int(inv_frame[inv_frame['ItemNum'] == sku]['ActualAvailableQty'])
-                location = inv_frame[inv_frame['ItemNum'] == sku]['Warehouse'].to_list()[0]
+                location = inv_frame[inv_frame['ItemNum'] == sku]['Location'].to_list()[0]
             except:
                 qty = ''
                 location = ''
             sum_frame['ActualAvailableQty'].iloc[i] = qty
-            sum_frame['Warehouse'].iloc[i] = location
+            sum_frame['Location'].iloc[i] = location
             if vendor_code.upper() == 'DJ0JZ':
                 sum_frame['filter'].iloc[i] = '只走库存'
             if re.search(r'-(16|17)$', sku):  # 是否结尾待确认
@@ -119,7 +119,7 @@ class InvDataProcess(GetApiInvData,DataFilter):
 
         sum_frame.drop('ASIN', axis=1, inplace=True)
         sum_frame = sum_frame[
-            ['Vendor Code', 'Model Number', 'Title', 'total', 'ActualAvailableQty', 'Warehouse', 'filter']]
+            ['Vendor Code', 'Model Number', 'Title', 'total', 'ActualAvailableQty', 'Location', 'filter']]
         sum_frame['Model Number'].fillna('空', inplace=True)
         sum_frame.loc[sum_frame['ActualAvailableQty'] == '', 'ActualAvailableQty'] = np.nan  # 将空串替换为Nan
         sum_frame['ActualAvailableQty'].fillna(0, inplace=True)  # 将Nan值填充为0

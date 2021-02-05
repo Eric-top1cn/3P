@@ -5,78 +5,57 @@ Author :        Eric
 Create date ：  2020/11/11
 """
 import requests
-from multiprocessing import Pool
-import os
-import pandas as pd
-from pymongo import MongoClient
-import datetime
-# from gevent import monkey
-# monkey.patch_all()
-# import gevent
-
+import re
+import json
+from settings import settings
 class GetApiInvData:
     def __init__(self):
-        self.inv_save_file = r'inv.csv'
+        self.inv_save_file = settings.inv_cache_file
 
-
-    def get_current_date(self):
-        today = datetime.datetime.today()
-        date = str(today.month).rjust(2, '0') + str(today.day).rjust(2, '0')
-        return date
-
-
-    def hs_mongo_config(self,col_name, db_name='3P'):
-        host = ''
-        port = ''
-        user = ''
-        pwd = ''
-        client = MongoClient(host, port, username=user, password=pwd)[db_name]
-        col = client[col_name]
-        return col
-
-    def get_api_data(self,sku,location='LA',retry=0):
-        '''
-        以post方式获取指定仓库指定SKU的产品库存信息
-        '''
-        uri =  f'http://vpn.bizrightllc.com:8111/TPA/API/InventoryData/getInventoryDataDailySnapShot?pageNo=1&pageSize=10000&ItemNum={sku}&Warehouse={location}'
-        print(f'开始获取{sku}数据')
-        if retry >= 3: return
-
-        try:
-            response = requests.post(uri)
-            if response.status_code == 200:
-                print(f'{sku}获取成功')
-                return response.json()['result']['dataResult'][0]
-            else:
-                print(sku, ' 获取失败， ', response.status_code, retry + 1)
-            return self.get_api_data(sku, location,retry+1)
-        except:
-            print('其他错误',sku,retry)
-            return self.get_api_data(sku, location, retry + 1)
-
-    def save_to_mongo(self,db,info):
-        if not info:return
-        if db.insert(info.copy()):
-            print(f'插入成功{info}')
+    def get_inv_num(self,sku_list):
+        url = input('请输入BOP接口url')  # 实时数据接口
+        
+        data = input('请补充api参数')
+        res = requests.post(url, data=data)
+        if res.status_code == 200:
+            if not res.json()['code'] == 200:  # 正常响应，返回错误
+                print(res.json())
+                # 从SKU列表中删除不存在信息，并重新发起请求
+                sku_list.remove(re.search('ItemNum(.+?)不存在', res.json()['message']).group(1).strip())
+                return self.get_inv_num(sku_list)
+            json.dump(self.parse_json(res), open(self.inv_save_file, 'w'))
+            self.get_location_data(sku_list)
+            # json.dump(res.json()['result']['dataResult'], open(self.inv_save_file, 'w'))
         else:
-            print(f'插入失败{info}')
+            return self.get_inv_num(sku_list)
 
+    def parse_json(self, response):
+        '''解析库存结果，选出结果中Warehouse为LA的库存结果，并逐条dict删除StoreLocationLines键及其结果'''
+        result = []
+        js = response.json()['result']['dataResult']
+        for item in js:
+            item = item['InventoryModel']['InventoryDataTypes']
+            item = [info for info in item if info['Warehouse'] == 'LA'][0]
+            item = {key: item[key] for key in item.keys() if not key == 'StoreLocationLines'}
+            result.append(item)
+        return result
 
-    def check_lost_data(self,sku_list):
-        '''
-        获取api数据完成后，对比查找缺失的sku数据，重新获取并保存
-        '''
-        date = self.get_current_date()
-        mongo = self.hs_mongo_config(f'inv_data_{date}')
+    def get_location_data(self,sku_list):
+        '''通过快照API，获取给定SKU列表中有库存产品的Location信息'''
+        url = input('请输入BOP备份接口url')  # 备份数据接口
+        data =  input('请补充api参数')
+        res = requests.post(url, data=data)
+        if res.status_code == 200:
+            if not res.json()['code'] == 200:  # 正常响应，返回错误
+                print(res.json())
+                # 从SKU列表中删除不存在信息，并重新发起请求
+                sku_list.remove(re.search('ItemNum(.+?)不存在', res.json()['message']).group(1).strip())
+                return self.get_inv_num(sku_list)
+            json.dump(res.json()['result']['dataResult'], open(settings.location_data_file, 'w'))
+        else:
+            return self.get_inv_num(sku_list)
 
-        target_frame = pd.DataFrame(mongo.find())
-        target_list = target_frame['ItemNum'].drop_duplicates().tolist()
-        for  sku in sku_list:
-            if not sku in target_list:
-                self.get_data(sku)
-
-    def del_inv_file(self):
-        '''
-        处理完成后删除inv文件
-        '''
-        os.remove(self.inv_save_file)
+if __name__ == '__main__':
+    # t = GetApiInvData().get_current_date()
+    # print(t)
+    pass
