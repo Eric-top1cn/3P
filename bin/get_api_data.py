@@ -13,9 +13,10 @@ class GetApiInvData:
         self.inv_save_file = settings.inv_cache_file
 
     def get_inv_num(self,sku_list):
-        url = input('请输入BOP接口url')  # 实时数据接口
-        
-        data = input('请补充api参数')
+        '''计算实时库存数据'''
+        url = settings.real_inv_api
+        data = settings.inv_api_data
+        data[settings.api_sku_key] = sku_list
         res = requests.post(url, data=data)
         if res.status_code == 200:
             if not res.json()['code'] == 200:  # 正常响应，返回错误
@@ -42,8 +43,9 @@ class GetApiInvData:
 
     def get_location_data(self,sku_list):
         '''通过快照API，获取给定SKU列表中有库存产品的Location信息'''
-        url = input('请输入BOP备份接口url')  # 备份数据接口
-        data =  input('请补充api参数')
+        url = settings.snapshot_api
+        data = settings.inv_api_data
+        data[settings.api_sku_key] = sku_list
         res = requests.post(url, data=data)
         if res.status_code == 200:
             if not res.json()['code'] == 200:  # 正常响应，返回错误

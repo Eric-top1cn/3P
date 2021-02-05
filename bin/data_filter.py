@@ -19,11 +19,9 @@ class DataFilter:
         self.file_path = file_path
         self.result_path = os.path.join(self.file_path,'result')
         if not os.path.exists(self.result_path): os.mkdir(self.result_path)
-
         origin_data_file = os.path.join(file_path,settings.origin_file['BasicData'])
         sku_relation_file = os.path.join(file_path,settings.origin_file['SKURalationFile'])
         avc_file = os.path.join(file_path,settings.origin_file['CancelFile'])
-
         origin_data_frame = self.read_origin_data(origin_data_file)
         origin_data_frame = self.relation_judgement(sku_relation_file,origin_data_frame)
         origin_data_frame = self.avc_judgement(avc_file,origin_data_frame)
@@ -53,12 +51,9 @@ class DataFilter:
         '''
         relationship = pd.DataFrame(pd.read_excel(relation_file))  # 读关系表
         cancel_words = settings.cancel_words  # cancel words
-
-
         for i in range(len(data_frame['Vendor Code'])):
             code = str(data_frame['Vendor Code'].iloc[i])
             model_num = str(data_frame['Model Number'].iloc[i])
-
             if model_num[:4] in relationship[relationship['Vendor Code'] == code]['Model Num'].to_list():
                 data_frame['condition'].iloc[i] = 1
             else:
@@ -81,8 +76,7 @@ class DataFilter:
         asin_frame = pd.DataFrame()
         for sheet in cancel_sheets:
             try:
-                item = pd.DataFrame(
-                    pd.read_excel(
+                item = pd.DataFrame(pd.read_excel(
                         avc_file,
                         sheet_name=sheet,
                         usecols=[1]))
@@ -95,7 +89,6 @@ class DataFilter:
         for sheet in settings.sku_cancel_sheets:
             item = pd.concat([item, pd.DataFrame(pd.read_excel(
                 avc_file, sheet_name=sheet, usecols=[1]))], ignore_index=True)
-
         for sheet in cancel_sheets:
             item['Vendor Code'] = sheet
             item.dropna(subset=['ASIN'], inplace=True)

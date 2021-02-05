@@ -22,7 +22,6 @@ class InvDataProcess(GetApiInvData,DataFilter):
         '''
         处理库存数据，inv_result_file为要输出的库存结果保存目录
         '''
-
         self.inv_result_file = os.path.join(self.result_path,'inventory.xlsx')
         sku_list = self.sum_result_frame['Model Number'].tolist()
         self.start_spider(sku_list)
@@ -41,7 +40,6 @@ class InvDataProcess(GetApiInvData,DataFilter):
         for sheet in sum_frame['Vendor Code'].drop_duplicates():
             sheet_frame = sum_frame[sum_frame['Vendor Code'] == sheet]
             sheet_frame = sheet_frame.sort_values('Model Number', ascending=False)
-
             sheet_frame.loc[sheet_frame['ActualAvailableQty'] <= 0, 'Location'] = np.nan
             sheet_frame.loc[sheet_frame['ActualAvailableQty'] <= 0, 'ActualAvailableQty'] = np.nan
             sheet_frame.to_excel(excel_writer,sheet_name=sheet, index=False)
@@ -53,14 +51,12 @@ class InvDataProcess(GetApiInvData,DataFilter):
         修改原始表数据中不接单的状态，并将dj0jz中无库存的产品全部改为不接单
         target file为汇总数据与库存合并后的存储文件
         '''
-
         try:
             djz_frame = pd.read_excel(target_file,sheet_name='DJ0JZ')
             djz_frame['ActualAvailableQty'].fillna(0,inplace=True)
         except:
             djz_frame = pd.DataFrame()
         filter_frame = self.filter_data_frame.copy()
-
         # 修改状态
         for i,model_number in enumerate(filter_frame['Model Number']):
             model_number = filter_frame['Model Number'].iloc[i]
@@ -72,10 +68,8 @@ class InvDataProcess(GetApiInvData,DataFilter):
             # 跳过BOP中查不到的库存信息
             if len(djz_frame[djz_frame['Model Number'] == model_number]) < 1:
                 continue
-
             if int(djz_frame[djz_frame['Model Number'] == model_number]['ActualAvailableQty']) <= 0:
                 filter_frame['Availability Status'].iloc[i] = 'OS - Cancelled: Out of stock'
-
         filter_frame.loc[filter_frame['Availability Status'] != 'AC - Accepted', 'Quantity Confirmed'] = 0
         self.filter_data_frame = filter_frame.copy()
 
@@ -84,7 +78,6 @@ class InvDataProcess(GetApiInvData,DataFilter):
         '''
         将汇总后的原始数据与库存数据合并
         '''
-
         sum_frame = pd.read_excel(sum_agg_file)
         inv_frame = pd.read_json(self.inv_save_file)
         location_frame = pd.read_json(settings.location_data_file)
@@ -93,7 +86,6 @@ class InvDataProcess(GetApiInvData,DataFilter):
         inv_frame.drop_duplicates(['ItemNum'],inplace=True)
         inv_frame = inv_frame[['ItemNum', 'ActualAvailableQty', 'Location']]
         for column in ['ActualAvailableQty', 'Location', 'filter']: sum_frame[column] = np.nan
-
         for i,sku in enumerate(sum_frame['Model Number']):
             sku = str(sum_frame['Model Number'].iloc[i])
             vendor_code = str(sum_frame['Vendor Code'].iloc[i])
@@ -116,7 +108,6 @@ class InvDataProcess(GetApiInvData,DataFilter):
                     sum_frame['filter'].iloc[i] = '走库存'
                 else:
                     sum_frame['filter'].iloc[i] = '不走库存'
-
         sum_frame.drop('ASIN', axis=1, inplace=True)
         sum_frame = sum_frame[
             ['Vendor Code', 'Model Number', 'Title', 'total', 'ActualAvailableQty', 'Location', 'filter']]

@@ -42,11 +42,14 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         super().__init__()
         self.setupUi(self)
         self.select_radio_button()
+        # 指定文件路径及文件名
         self.open_file_path = settings.origin_file_path
         self.cache_file = settings.cache_file
         self.cache_result = settings.result_cache_path_file
+        # 当文件夹不存在时，自动生成指定文件夹
         if not os.path.exists(self.open_file_path):os.mkdir(self.open_file_path)
         if not os.path.exists(settings.out_put_file_path): os.makedirs(settings.out_put_file_path)
+        # 当程序终止时，读取缓存文件，避免重复进行
         try:self.filter_data_frame = pd.read_excel(os.path.join(settings.out_put_file_path,settings.out_put_file['FilterFile']))
         except:self.filter_data_frame = pd.DataFrame()
         try:
@@ -63,12 +66,12 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         self.function_group.addButton(self.inv_data_process_button, id=13)
         self.function_group.addButton(self.combo_split_button, id=14)
         self.function_group.addButton(self.func_merge_button,id=15)
-
         self.info = ''
         self.function_group.buttonClicked.connect(self.func_group_radio_click)
         self.func_select_certain_button.clicked.connect(self.submit)
 
     def func_group_radio_click(self):
+        '''根据radio按钮选择要执行的操作'''
         sender = self.sender()
         if not sender == self.function_group: return
         if self.function_group.checkedId() == 11: self.info = '11'
@@ -79,6 +82,10 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         else: self.info = ''
 
     def submit(self):
+        '''
+        根据信号判断要执行的函数
+        signal 用于判断函数是否正常执行结束，当signal为1时，表示函数继续执行，当signal为4时，函数执行中止
+        '''
         signal = -1
         if self.info == '':
             QMessageBox.information(self,'Surprise','别皮！！！')
@@ -106,21 +113,20 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
                 QMessageBox.information(self, 'Warning', '发生错误，请重试', QMessageBox.Ok)
             return
         elif self.info == '13':
-            # if signal == 4: return
-            # try:
+            if signal == 4: return
+            try:
                 signal = self.main_inv_data_process()
                 if signal: QMessageBox.information(self, 'Notice', '库存数据处理完成', QMessageBox.Ok)
-            # except:QMessageBox.information(self, 'Warning', '发生错误，请重试', QMessageBox.Ok)
-            # return
-
+            except:QMessageBox.information(self, 'Warning', '发生错误，请重试', QMessageBox.Ok)
+            return
         elif self.info == '14':
             if signal == 4: return
             try:
                 signal = self.main_combo_split()
                 if signal: QMessageBox.information(self, 'Notice', '处理完成，文件已保存', QMessageBox.Ok)
+            except PermissionError: QMessageBox.information(self, 'Warning', '无写入文件权限，请关闭Excel后重试', QMessageBox.Ok)
             except:QMessageBox.information(self, 'Warning', '发生错误，请重试', QMessageBox.Ok)
             return
-
         elif self.info == '15':
             try:
                 signal = self.main_origin_data_process()
@@ -153,10 +159,11 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         '''原始数据处理'''
         QMessageBox.information(self, 'Notice', '选择原始数据所在文件夹', QMessageBox.Ok)
         self.file_path = settings.origin_file_path
+        # 指定目标文件夹
         if os.path.exists(self.cache_file): self.file_path = self.read_cache_path() # 读上次打开文件夹路径
         if not os.path.exists(os.path.dirname(self.cache_file)): os.makedirs(os.path.dirname(self.cache_file))
         self.file_path = QFileDialog.getExistingDirectory(self,'选择原始数据所在文件夹',self.file_path)
-
+        # 选择目标文件
         origin_data_file = os.path.join(self.file_path, settings.origin_file['BasicData'])
         sku_relation_file = os.path.join(self.file_path, settings.origin_file['SKURalationFile'])
         avc_file = os.path.join(self.file_path, settings.origin_file['CancelFile'])
@@ -166,12 +173,13 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
             sku_relation_file = self.search_file('关系表')
         if not os.path.exists(avc_file):
             sku_relation_file = self.search_file('Cancellation表')
-
         QMessageBox.information(self, 'Notice', '开始处理原始数据', QMessageBox.Ok)
         origin_data_frame = self.read_origin_data(origin_data_file)
+        # 无订单信息
         if origin_data_frame.empty:
             QMessageBox.information(self,'Warning!','原始表为空表，请注意！！！',QMessageBox.Ok)
             return 4
+        # 数据处理
         origin_data_frame = self.relation_judgement(sku_relation_file, origin_data_frame)
         origin_data_frame = self.avc_judgement(avc_file, origin_data_frame)
         self.filter_data_frame = origin_data_frame.drop('condition', axis=1)  # 记录筛选完成后的原始数据
@@ -179,6 +187,7 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         self.sum_result_frame.to_excel(os.path.join(settings.out_put_file_path,settings.out_put_file['SumResult']),index=False) # 临时结果文件，预防断点
         self.filter_data_frame.to_excel(os.path.join(settings.out_put_file_path,settings.out_put_file['FilterFile']),index=False)
         self.write_cache_path(self.file_path)  # 保存本次读取文件所在文件夹路径
+        # 判断处理完成后，订单是否全部cancel
         if self.filter_data_frame.empty:
             QMessageBox.information(self,'Notice','筛选完成，本次无订单',QMessageBox.Ok)
             return 4
@@ -198,21 +207,22 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         '''库存数据处理'''
         inv_result_file = os.path.join(settings.out_put_file_path,settings.out_put_file['InvFile'])
         sum_agg_result_file = os.path.join(settings.out_put_file_path,settings.out_put_file['SumResult'])
+        # 无分类汇总后的数据缓存文件
         if not os.path.exists(sum_agg_result_file):
             QMessageBox.information(self,'Warning','请按顺序执行',QMessageBox.Ok)
             return
-
         self.data_merge(sum_agg_result_file)
         self.vendor_sheet_data_process(inv_result_file)
         self.status_modify(inv_result_file)
         return 1
 
     def write_result_path(self, path):
-        '''保存打开的文件夹路径'''
+        '''保存结果文件存放的文件夹路径'''
         with open(self.cache_result, 'w') as fp:
             fp.write(path)
 
     def read_result_path(self):
+        '''读取结果文件存放的文件夹路径'''
         with open(self.cache_result,'r') as fp:
             path = fp.readlines()[-1].strip()
             return path
@@ -227,14 +237,12 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         if os.path.exists(self.cache_result): result_path = self.read_result_path()
         QMessageBox.information(self,'Notice','选择要保存的结果文件夹',QMessageBox.Ok)
         result_path = QFileDialog.getExistingDirectory(self,'选择要保存的文件夹',result_path)
-
         self.get_case_frame(vendor_order_file)
         self.get_combo_splitted_frame(vendor_order_file)
-        # 保存文件到结果文件夹
+        # 待处理的combo sheet中产品拆分及订单计算
         self.inv_result_file = os.path.join(settings.out_put_file_path,settings.out_put_file['InvFile'])
         if not os.path.exists(self.inv_result_file):
             self.inv_result_file = self.search_file('库存表')
-
         excel_file = pd.ExcelFile(self.inv_result_file)
         for sheet in settings.combo_split_sheet_list:
             if not sheet in excel_file.sheet_names: continue  # 跳过不包含combo的sheet
@@ -260,6 +268,7 @@ class ModelThrP(ComboSplit,Ui_MainWindow,QMainWindow):
         return 1
 
     def truncate_database(self):
+        '''清除Online数据库相关信息'''
         QMessageBox.information(self,'Notice','此功能已停止使用，数据错误请联系管理员',QMessageBox.Ok)
         return
         ok = QMessageBox.information(self,'Warnings','确定删除所有数据表吗？？？',QMessageBox.Yes|QMessageBox.No)
